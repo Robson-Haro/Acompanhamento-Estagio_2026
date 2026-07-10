@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --navy:#0e2439; --navy2:#153153; --ink:#22303f; --gold:#c9a24b; --gold2:#e0c078;
@@ -198,7 +199,7 @@ tbody tr:hover{background:#faf8f2}
   <div class="kpis" id="kpis" style="order:1"></div>
 
   <div class="updater" style="order:2">
-    <div class="u-t">Atualizar dados<small>Suba as planilhas da semana &mdash; recalcula tudo no navegador</small></div>
+    <div class="u-t">Atualizar dados<small>Suba a P1 e a P2 da semana e clique em Recalcular. Com a nuvem ligada, isso publica para toda a equipe.</small></div>
     <label class="drop" id="dropP1"><b>P1</b> &middot; Vagas + Cursos (.xlsx)<br><small id="nameP1">arraste ou clique</small>
       <input type="file" id="fileP1" accept=".xlsx,.xls" hidden></label>
     <label class="drop" id="dropP2"><b>P2</b> &middot; Triagem (.csv)<br><small id="nameP2">arraste ou clique</small>
@@ -670,14 +671,47 @@ bind('dropP2','fileP2','nameP2',f=>{Papa.parse(f,{header:false,delimiter:';',ski
       canal:qa(r,'Como voc\u00ea ficou sabendo dessa oportunidade')});}
   setStatus('P2 lida ('+NEW_P2.length+' candidatos \u00fanicos por nome). Clique Recalcular.','ok');}});});
 function setStatus(t,c){const s=document.getElementById('uStatus');s.textContent=t;s.className='u-status '+(c||'');}
-document.getElementById('btnRecalc').addEventListener('click',()=>{
+document.getElementById('btnRecalc').addEventListener('click',async ()=>{
   const p1=NEW_P1||RAW_P1,p2=NEW_P2||RAW_P2;
-  try{render(p1,p2);setStatus('Recalculado \u2713 '+new Date().toLocaleString('pt-BR'),'ok');
+  try{render(p1,p2);
+    if(SB){ setStatus('Publicando para a equipe\u2026','ok');
+      const ok=await cloudPublish(p1,p2);
+      setStatus(ok?('Publicado para a equipe \u2713 '+new Date().toLocaleString('pt-BR')+' \u2014 todos j\u00e1 veem esta vers\u00e3o.')
+        :'Recalculado, mas falhou ao publicar. Confira as credenciais do Supabase.', ok?'ok':'err'); }
+    else setStatus('Recalculado \u2713 '+new Date().toLocaleString('pt-BR'),'ok');
     window.scrollTo({top:0,behavior:'smooth'});}
   catch(err){setStatus('Erro: '+err.message,'err');console.error(err);}
 });
 
 render(RAW_P1,RAW_P2);
+
+/* ============================================================
+   SINCRONIZAÇÃO COM A EQUIPE (Supabase)
+   >>> COLE AQUI OS DOIS VALORES DO SEU PROJETO SUPABASE <<<
+   (Project Settings > API — "Project URL" e a chave "anon public")
+   ============================================================ */
+const SB_URL = "https://qupjdahdbuyzhqzjanxf.supabase.co";   // projeto Supabase
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cGpkYWhkYnV5emhxemphbnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMTg5NDMsImV4cCI6MjA5NTc5NDk0M30.M6pB909UaX2Z8rz5tyxgF7sC6UXkX4dzW50ZUzwrBhI";   // chave anon public
+
+const SB = (window.supabase && SB_URL && SB_KEY) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+function stampBR(dt){ try{return new Date(dt).toLocaleString('pt-BR');}catch(e){return '';} }
+async function cloudLoad(){
+  if(!SB) return null;
+  try{ const {data,error}=await SB.from('triagem_dados').select('p1,p2,atualizado_em').eq('id','atual').maybeSingle();
+    if(error||!data||!data.p2) return null; return data; }catch(e){ return null; }
+}
+async function cloudPublish(p1,p2){
+  if(!SB) return false;
+  try{ const {error}=await SB.from('triagem_dados').upsert({id:'atual',p1,p2,atualizado_em:new Date().toISOString()});
+    return !error; }catch(e){ return false; }
+}
+async function initCloud(){
+  if(!SB) return;
+  const c=await cloudLoad();
+  if(c){ render(c.p1||RAW_P1, c.p2||RAW_P2);
+    setStatus('Sincronizado com a equipe \u2713 base de '+stampBR(c.atualizado_em),'ok'); }
+}
+initCloud();
 </script>
 </body>
 </html>
