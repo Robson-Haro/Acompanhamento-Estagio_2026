@@ -239,6 +239,24 @@ main{padding:34px 0 90px}
 .ffield input,.ffield select{width:100%;font-family:var(--body);font-size:13px;color:var(--ink);padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .ffield select{cursor:pointer}
 .ffield input:focus,.ffield select:focus{outline:none;border-color:var(--slate);box-shadow:0 0 0 3px rgba(87,124,151,.14)}
+.candidates-wrap{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.candidates-title{font-family:var(--display);font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--navy-deep);margin-bottom:9px}
+.candidate{border:1px solid #DCE3E8;border-radius:9px;background:#fff;padding:10px;margin-top:8px}
+.candidate .candidate-name{font-size:11px;font-weight:800;color:var(--coral);margin-bottom:8px}
+.chart-columns{height:250px;display:flex;align-items:flex-end;gap:12px;padding:28px 8px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.chart-col{height:100%;min-width:74px;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.chart-col .value{font-family:var(--display);font-size:12px;font-weight:800;color:var(--navy-deep);margin-bottom:5px}
+.chart-col .column{width:min(54px,70%);min-height:2px;border-radius:7px 7px 0 0;transition:height .4s}
+.chart-col .label{min-height:44px;width:100%;padding-top:7px;font-size:10.5px;line-height:1.15;text-align:center;color:var(--ink-soft)}
+.donut-layout{display:flex;align-items:center;justify-content:center;gap:30px;flex-wrap:wrap;padding:6px 0}
+.donut{width:220px;height:220px;border-radius:50%;position:relative;flex:0 0 auto}
+.donut:after{content:"";position:absolute;inset:29%;border-radius:50%;background:var(--card)}
+.donut-center{position:absolute;inset:0;z-index:1;display:grid;place-content:center;text-align:center;font-family:var(--display);font-weight:800;color:var(--navy-deep)}
+.donut-center small{display:block;font-family:var(--body);font-size:10px;font-weight:500;color:var(--ink-soft)}
+.donut-legend{min-width:190px}
+.donut-row{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;margin:10px 0;font-size:12px}
+.donut-row .dot{width:10px;height:10px;border-radius:50%}
+.donut-row b{font-family:var(--display);color:var(--navy-deep)}
 .div-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
 
 footer{background:var(--navy-deep);color:#9FB3C2;text-align:center;padding:22px;font-size:12px;border-top:4px solid var(--coral)}
@@ -363,7 +381,7 @@ footer b{color:#fff;font-family:var(--display)}
     <div class="bigsec">
       <div class="sec-head">
         <h2><span class="bar"></span>Status das Cidades</h2>
-        <p>Para cada cidade, informe o número de <b>Vagas</b>. Ao digitar a quantidade, abrem-se os campos por vaga: <b>Área</b>, <b>Status</b>, <b>Gênero</b> e <b>Raça/Cor</b>.</p>
+        <p>Para cada cidade, informe o número de <b>Vagas</b>. Em cada vaga, registre <b>Área</b>, <b>Status</b> e a <b>Quantidade de candidatos</b>. Os campos sociais de cada candidato serão abertos automaticamente.</p>
       </div>
       <div id="statusEntry"></div>
     </div>
@@ -747,6 +765,14 @@ function shortLabel(id){return({candidaturas:"Candid.",bigfive:"Big Five",triage
 
 /* ---------- STATUS DAS CIDADES (entrada por vaga) ---------- */
 function cityRec(c){if(!S.cidades[c])S.cidades[c]={vagas:"",items:[]};if(!S.cidades[c].items)S.cidades[c].items=[];return S.cidades[c];}
+function normalizeVaga(it){
+  if(!it)return {area:"",status:"",qtdCandidatos:"",candidatos:[]};
+  if(!Array.isArray(it.candidatos))it.candidatos=[];
+  /* Migração compatível: gênero/raça antigos viram o primeiro candidato, sem apagar a origem. */
+  if((it.genero||it.raca)&&!it.candidatos.length)it.candidatos.push({genero:it.genero||"",raca:it.raca||""});
+  if(it.qtdCandidatos==null||it.qtdCandidatos==="")it.qtdCandidatos=it.candidatos.length||"";
+  return it;
+}
 function renderStatusEntry(){
   const wrap=document.getElementById('statusEntry');const open=[...document.querySelectorAll('.citycard.open')].map(e=>e.id);
   wrap.innerHTML="";
@@ -775,13 +801,31 @@ function vagaBlocks(c,n){
   if(!n)return `<div class="empty" style="grid-column:1/-1">Informe o número de vagas para abrir os campos.</div>`;
   const r=cityRec(c);let html="";
   for(let k=0;k<n;k++){
-    const it=r.items[k]||{area:"",status:"",genero:"",raca:""};
+    const it=normalizeVaga(r.items[k]||{area:"",status:"",qtdCandidatos:"",candidatos:[]});r.items[k]=it;
+    const qtd=it.qtdCandidatos===""?"":Math.max(0,parseInt(it.qtdCandidatos,10)||0);
     html+=`<div class="vaga">
       <div class="vh"><span class="num">${k+1}</span> Vaga ${k+1}</div>
       <div class="ffield"><label>Área</label><input type="text" value="${escapeAttr(it.area||'')}" placeholder="Ex.: Operações" oninput="setVaga('${escapeAttr(c)}',${k},'area',this.value)"/></div>
       <div class="ffield"><label>Status</label><select onchange="setVaga('${escapeAttr(c)}',${k},'status',this.value)">${optList(STATUS_OPTS,it.status)}</select></div>
-      <div class="ffield"><label>Gênero</label><select onchange="setVaga('${escapeAttr(c)}',${k},'genero',this.value)">${optList(GENERO_OPTS,it.genero)}</select></div>
-      <div class="ffield"><label>Raça/Cor</label><select onchange="setVaga('${escapeAttr(c)}',${k},'raca',this.value)">${optList(RACA_OPTS,it.raca)}</select></div>
+      <div class="ffield"><label>Quantidade de candidatos nesta vaga</label><input type="number" min="0" inputmode="numeric" value="${qtd}" placeholder="0" oninput="setQtdCandidatos('${escapeAttr(c)}',${k},this.value)"/></div>
+      <div class="candidates-wrap">
+        <div class="candidates-title">Dados sociais dos candidatos</div>
+        <div id="cand-${cityKey(c)}-${k}">${candidateBlocks(c,k,qtd)}</div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+function cityKey(c){return String(c).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'-');}
+function candidateBlocks(c,k,qtd){
+  if(!qtd)return `<div class="empty" style="padding:10px 4px">Informe a quantidade de candidatos.</div>`;
+  const it=normalizeVaga(cityRec(c).items[k]);let html="";
+  for(let j=0;j<qtd;j++){
+    const cand=it.candidatos[j]||{genero:"",raca:""};it.candidatos[j]=cand;
+    html+=`<div class="candidate">
+      <div class="candidate-name">Candidato ${j+1}</div>
+      <div class="ffield"><label>Gênero</label><select onchange="setCandidato('${escapeAttr(c)}',${k},${j},'genero',this.value)">${optList(GENERO_OPTS,cand.genero)}</select></div>
+      <div class="ffield"><label>Raça/Cor</label><select onchange="setCandidato('${escapeAttr(c)}',${k},${j},'raca',this.value)">${optList(RACA_OPTS,cand.raca)}</select></div>
     </div>`;
   }
   return html;
@@ -789,21 +833,34 @@ function vagaBlocks(c,n){
 function optList(opts,sel){let h=`<option value="">— selecione —</option>`;opts.forEach(o=>{h+=`<option value="${escapeAttr(o)}" ${o===sel?'selected':''}>${o}</option>`;});return h;}
 function setVagas(c,i,v){
   const r=cityRec(c);const n=Math.max(0,parseInt(v,10)||0);r.vagas=v===""?"":n;
-  while(r.items.length<n)r.items.push({area:"",status:"",genero:"",raca:""});
-  if(r.items.length>n)r.items=r.items.slice(0,n);
+  while(r.items.length<n)r.items.push({area:"",status:"",qtdCandidatos:"",candidatos:[]});
+  /* Itens acima da quantidade informada ficam preservados para evitar perda acidental. */
   save(true);
   const grid=document.getElementById('vg-'+i);if(grid)grid.innerHTML=vagaBlocks(c,n);
   const badge=document.querySelector('#cc-'+i+' .vg');if(badge){badge.textContent=n+" vaga"+(n===1?'':'s');badge.className="vg "+(n?'':'zero');}
   renderDiversity();
 }
-function setVaga(c,k,f,v){const r=cityRec(c);if(!r.items[k])r.items[k]={area:"",status:"",genero:"",raca:""};r.items[k][f]=v;save(true);renderDiversity();}
+function setVaga(c,k,f,v){const r=cityRec(c);if(!r.items[k])r.items[k]={area:"",status:"",qtdCandidatos:"",candidatos:[]};normalizeVaga(r.items[k])[f]=v;save(true);renderDiversity();}
+function setQtdCandidatos(c,k,v){
+  const it=normalizeVaga(cityRec(c).items[k]);const qtd=Math.max(0,parseInt(v,10)||0);it.qtdCandidatos=v===""?"":qtd;
+  while(it.candidatos.length<qtd)it.candidatos.push({genero:"",raca:""});
+  /* Candidatos excedentes também são mantidos no estado, mas não entram nos gráficos. */
+  save(true);const wrap=document.getElementById(`cand-${cityKey(c)}-${k}`);if(wrap)wrap.innerHTML=candidateBlocks(c,k,qtd);renderDiversity();
+}
+function setCandidato(c,k,j,f,v){
+  const it=normalizeVaga(cityRec(c).items[k]);if(!it.candidatos[j])it.candidatos[j]={genero:"",raca:""};
+  it.candidatos[j][f]=v;save(true);renderDiversity();
+}
 
 /* ---------- DASHBOARD STATUS & DIVERSIDADE ---------- */
 function collectItems(city){
   let items=[];
-  if(city==="__geral__")CITIES.forEach(c=>{const r=S.cidades[c];if(r&&r.items)items=items.concat(r.items);});
-  else{const r=S.cidades[city];if(r&&r.items)items=r.items.slice();}
+  if(city==="__geral__")CITIES.forEach(c=>{const r=S.cidades[c];if(r&&r.items)items=items.concat(r.items.slice(0,parseInt(r.vagas,10)||0).map(normalizeVaga));});
+  else{const r=S.cidades[city];if(r&&r.items)items=r.items.slice(0,parseInt(r.vagas,10)||0).map(normalizeVaga);}
   return items;
+}
+function collectCandidates(items){
+  let out=[];items.forEach(it=>{const qtd=Math.max(0,parseInt(it.qtdCandidatos,10)||0);out=out.concat((it.candidatos||[]).slice(0,qtd));});return out;
 }
 function totalVagas(city){
   if(city==="__geral__"){let t=0;CITIES.forEach(c=>{const r=S.cidades[c];t+=parseInt(r&&r.vagas,10)||0;});return t;}
@@ -811,8 +868,8 @@ function totalVagas(city){
 }
 function renderDiversity(){
   const city=document.getElementById('citySel').value,area=document.getElementById('diversityArea');
-  const items=collectItems(city),vagas=totalVagas(city);
-  const preenchidos=items.filter(it=>it.status||it.genero||it.raca||it.area).length;
+  const items=collectItems(city),candidatos=collectCandidates(items),vagas=totalVagas(city);
+  const preenchidos=items.filter(it=>it.status||it.area||it.qtdCandidatos!=="").length;
   if(vagas===0&&items.length===0){
     area.innerHTML=`<div class="dcard"><div class="empty">🧭 Nenhuma vaga registrada${city==="__geral__"?'':' para '+escapeHtml(city)}.<br>Vá até <b>Status das Cidades</b> abaixo e informe as vagas.</div></div>`;return;
   }
@@ -820,34 +877,50 @@ function renderDiversity(){
   const repDecl=items.filter(it=>it.status==='Reprovado G&G'||it.status==='Reprovado Gestor'||it.status==='Declinou').length;
   let html=`<div class="div-kpis">
     <div class="kpi" style="--accent:#2B5373"><div class="k">Vagas</div><div class="v">${fmt(vagas)}</div><div class="s">${city==="__geral__"?'todas as cidades':escapeHtml(city)}</div></div>
-    <div class="kpi" style="--accent:#577C97"><div class="k">Registros preenchidos</div><div class="v">${fmt(preenchidos)}</div><div class="s">de ${fmt(items.length)} aberto(s)</div></div>
+    <div class="kpi" style="--accent:#C9A84C"><div class="k">Candidatos</div><div class="v">${fmt(candidatos.length)}</div><div class="s">distribuídos nas vagas</div></div>
+    <div class="kpi" style="--accent:#577C97"><div class="k">Vagas preenchidas</div><div class="v">${fmt(preenchidos)}</div><div class="s">de ${fmt(items.length)} aberta(s)</div></div>
     <div class="kpi" style="--accent:#2E9E5B"><div class="k">Em admissão/contrato</div><div class="v">${fmt(inAdm)}</div><div class="s">status final</div></div>
     <div class="kpi" style="--accent:#D23B43"><div class="k">Reprovados/Declínios</div><div class="v">${fmt(repDecl)}</div><div class="s">saídas do processo</div></div>
   </div>`;
-  html+=distCard("Distribuição por Status",items,"status",STATUS_OPTS,STATUS_COLORS);
-  html+=distCard("Distribuição por Gênero",items,"genero",GENERO_OPTS,GENERO_COLORS);
-  html+=distCard("Distribuição por Raça/Cor",items,"raca",RACA_OPTS,RACA_COLORS);
+  html+=columnCard("Distribuição por Status",items,"status",STATUS_OPTS,STATUS_COLORS,"vagas");
+  html+=donutCard("Distribuição por Gênero",candidatos,"genero",GENERO_OPTS,GENERO_COLORS);
+  html+=columnCard("Distribuição por Raça/Cor",candidatos,"raca",RACA_OPTS,RACA_COLORS,"candidatos");
+  html+=candidatesByVacancy(items);
   if(city==="__geral__")html+=vagasByCity();
   area.innerHTML=html;
 }
-function distCard(title,items,field,opts,colors){
+function distribution(items,field,opts){
   const counts={};opts.forEach(o=>counts[o]=0);let tot=0;
   items.forEach(it=>{const v=it[field];if(v&&counts.hasOwnProperty(v)){counts[v]++;tot++;}});
-  let rows="";
-  if(tot===0)rows=`<div class="empty">Sem registros preenchidos para este recorte.</div>`;
-  else opts.forEach(o=>{const n=counts[o],p=tot?n/tot*100:0;
-    rows+=`<div class="barrow"><div class="top"><span>${o}</span><b>${n} · ${p.toFixed(1)}%</b></div><div class="bartrack"><div class="barfill" style="width:${p}%;background:${colors[o]}"></div></div></div>`;});
-  return `<div class="dcard"><h3><span class="bar"></span>${title}</h3><div class="ch-sub">Base: ${tot} registro(s) preenchido(s).</div>${rows}</div>`;
+  return {counts,tot};
+}
+function columnCard(title,items,field,opts,colors,unit){
+  const {counts,tot}=distribution(items,field,opts);if(!tot)return `<div class="dcard"><h3><span class="bar"></span>${title}</h3><div class="empty">Sem registros preenchidos para este recorte.</div></div>`;
+  const max=Math.max(1,...opts.map(o=>counts[o]));const cols=opts.map(o=>{const n=counts[o],p=tot?n/tot*100:0,h=n?Math.max(5,n/max*155):2;
+    return `<div class="chart-col"><div class="value">${n} · ${p.toFixed(1)}%</div><div class="column" style="height:${h}px;background:${colors[o]}"></div><div class="label">${escapeHtml(o)}</div></div>`;}).join('');
+  return `<div class="dcard"><h3><span class="bar"></span>${title}</h3><div class="ch-sub">Base: ${tot} ${unit} com informação preenchida.</div><div class="chart-columns">${cols}</div></div>`;
+}
+function donutCard(title,items,field,opts,colors){
+  const {counts,tot}=distribution(items,field,opts);if(!tot)return `<div class="dcard"><h3><span class="bar"></span>${title}</h3><div class="empty">Sem registros preenchidos para este recorte.</div></div>`;
+  let acc=0;const stops=[];opts.forEach(o=>{const start=acc;acc+=counts[o]/tot*100;stops.push(`${colors[o]} ${start}% ${acc}%`);});
+  const legend=opts.map(o=>{const n=counts[o],p=n/tot*100;return `<div class="donut-row"><span class="dot" style="background:${colors[o]}"></span><span>${escapeHtml(o)}</span><b>${n} · ${p.toFixed(1)}%</b></div>`;}).join('');
+  return `<div class="dcard"><h3><span class="bar"></span>${title}</h3><div class="ch-sub">Base: ${tot} candidatos com informação preenchida.</div><div class="donut-layout"><div class="donut" style="background:conic-gradient(${stops.join(',')})"><div class="donut-center">${tot}<small>candidatos</small></div></div><div class="donut-legend">${legend}</div></div></div>`;
+}
+function candidatesByVacancy(items){
+  if(!items.length)return "";const opts=items.map((_,i)=>`Vaga ${i+1}`),colors={},rows=[];
+  opts.forEach((o,i)=>{colors[o]=i%2?'#577C97':'#C9A84C';rows.push({label:o,qtd:Math.max(0,parseInt(items[i].qtdCandidatos,10)||0)});});
+  const max=Math.max(1,...rows.map(r=>r.qtd));const cols=rows.map((r,i)=>`<div class="chart-col"><div class="value">${fmt(r.qtd)}</div><div class="column" style="height:${r.qtd?Math.max(5,r.qtd/max*155):2}px;background:${colors[r.label]}"></div><div class="label">${r.label}<br>${escapeHtml(items[i].area||'Sem área')}</div></div>`).join('');
+  return `<div class="dcard"><h3><span class="bar"></span>Candidatos por vaga</h3><div class="ch-sub">Quantidade informada em cada vaga.</div><div class="chart-columns">${cols}</div></div>`;
 }
 function vagasByCity(){
-  const rows=CITIES.map(c=>({c,v:totalVagas(c),items:(S.cidades[c]&&S.cidades[c].items)||[]})).filter(r=>r.v>0||r.items.some(i=>i.status||i.genero||i.raca));
+  const rows=CITIES.map(c=>({c,v:totalVagas(c),items:collectItems(c)})).filter(r=>r.v>0||r.items.some(i=>i.status||i.area||i.qtdCandidatos!==""));
   if(!rows.length)return "";
-  let body="",totV=0,totAdm=0;
-  rows.forEach(r=>{const adm=r.items.filter(i=>i.status==='Etapa de Admissão'||i.status==='Etapa de Assinatura de Contrato').length;totV+=r.v;totAdm+=adm;
-    body+=`<tr><td>${escapeHtml(r.c)}</td><td>${fmt(r.v)}</td><td>${fmt(r.items.filter(i=>i.status).length)}</td><td>${fmt(adm)}</td></tr>`;});
-  body+=`<tr class="tot"><td>TOTAL GERAL</td><td>${fmt(totV)}</td><td>—</td><td>${fmt(totAdm)}</td></tr>`;
-  return `<div class="dcard"><h3><span class="bar"></span>Vagas por cidade</h3><div class="ch-sub">Vagas declaradas, registros com status e quantos em admissão/contrato.</div>
-    <div style="overflow-x:auto"><table class="tbl"><tr><th>Cidade</th><th>Vagas</th><th>Com status</th><th>Em admissão</th></tr>${body}</table></div></div>`;
+  let body="",totV=0,totCand=0,totAdm=0;
+  rows.forEach(r=>{const adm=r.items.filter(i=>i.status==='Etapa de Admissão'||i.status==='Etapa de Assinatura de Contrato').length,cand=collectCandidates(r.items).length;totV+=r.v;totCand+=cand;totAdm+=adm;
+    body+=`<tr><td>${escapeHtml(r.c)}</td><td>${fmt(r.v)}</td><td>${fmt(cand)}</td><td>${fmt(r.items.filter(i=>i.status).length)}</td><td>${fmt(adm)}</td></tr>`;});
+  body+=`<tr class="tot"><td>TOTAL GERAL</td><td>${fmt(totV)}</td><td>${fmt(totCand)}</td><td>—</td><td>${fmt(totAdm)}</td></tr>`;
+  return `<div class="dcard"><h3><span class="bar"></span>Vagas por cidade</h3><div class="ch-sub">Vagas, candidatos e andamento por cidade.</div>
+    <div style="overflow-x:auto"><table class="tbl"><tr><th>Cidade</th><th>Vagas</th><th>Candidatos</th><th>Com status</th><th>Em admissão</th></tr>${body}</table></div></div>`;
 }
 
 /* ---------- UTIL ---------- */
