@@ -769,7 +769,7 @@ function normalizeVaga(it){
   if(!it)return {area:"",status:"",qtdCandidatos:"",candidatos:[]};
   if(!Array.isArray(it.candidatos))it.candidatos=[];
   /* Migração compatível: gênero/raça antigos viram o primeiro candidato, sem apagar a origem. */
-  if((it.genero||it.raca)&&!it.candidatos.length)it.candidatos.push({genero:it.genero||"",raca:it.raca||""});
+  if((it.genero||it.raca)&&!it.candidatos.length)it.candidatos.push({bp:"",nome:"",genero:it.genero||"",raca:it.raca||""});
   if(it.qtdCandidatos==null||it.qtdCandidatos==="")it.qtdCandidatos=it.candidatos.length||"";
   return it;
 }
@@ -821,9 +821,11 @@ function candidateBlocks(c,k,qtd){
   if(!qtd)return `<div class="empty" style="padding:10px 4px">Informe a quantidade de candidatos.</div>`;
   const it=normalizeVaga(cityRec(c).items[k]);let html="";
   for(let j=0;j<qtd;j++){
-    const cand=it.candidatos[j]||{genero:"",raca:""};it.candidatos[j]=cand;
+    const cand=it.candidatos[j]||{bp:"",nome:"",genero:"",raca:""};it.candidatos[j]=cand;
     html+=`<div class="candidate">
       <div class="candidate-name">Candidato ${j+1}</div>
+      <div class="ffield"><label>BP responsável</label><input type="text" value="${escapeAttr(cand.bp||'')}" placeholder="Nome do BP responsável" oninput="setCandidato('${escapeAttr(c)}',${k},${j},'bp',this.value)"/></div>
+      <div class="ffield"><label>Nome do candidato</label><input type="text" value="${escapeAttr(cand.nome||'')}" placeholder="Nome completo do candidato" oninput="setCandidato('${escapeAttr(c)}',${k},${j},'nome',this.value)"/></div>
       <div class="ffield"><label>Gênero</label><select onchange="setCandidato('${escapeAttr(c)}',${k},${j},'genero',this.value)">${optList(GENERO_OPTS,cand.genero)}</select></div>
       <div class="ffield"><label>Raça/Cor</label><select onchange="setCandidato('${escapeAttr(c)}',${k},${j},'raca',this.value)">${optList(RACA_OPTS,cand.raca)}</select></div>
     </div>`;
@@ -843,12 +845,12 @@ function setVagas(c,i,v){
 function setVaga(c,k,f,v){const r=cityRec(c);if(!r.items[k])r.items[k]={area:"",status:"",qtdCandidatos:"",candidatos:[]};normalizeVaga(r.items[k])[f]=v;save(true);renderDiversity();}
 function setQtdCandidatos(c,k,v){
   const it=normalizeVaga(cityRec(c).items[k]);const qtd=Math.max(0,parseInt(v,10)||0);it.qtdCandidatos=v===""?"":qtd;
-  while(it.candidatos.length<qtd)it.candidatos.push({genero:"",raca:""});
+  while(it.candidatos.length<qtd)it.candidatos.push({bp:"",nome:"",genero:"",raca:""});
   /* Candidatos excedentes também são mantidos no estado, mas não entram nos gráficos. */
   save(true);const wrap=document.getElementById(`cand-${cityKey(c)}-${k}`);if(wrap)wrap.innerHTML=candidateBlocks(c,k,qtd);renderDiversity();
 }
 function setCandidato(c,k,j,f,v){
-  const it=normalizeVaga(cityRec(c).items[k]);if(!it.candidatos[j])it.candidatos[j]={genero:"",raca:""};
+  const it=normalizeVaga(cityRec(c).items[k]);if(!it.candidatos[j])it.candidatos[j]={bp:"",nome:"",genero:"",raca:""};
   it.candidatos[j][f]=v;save(true);renderDiversity();
 }
 
