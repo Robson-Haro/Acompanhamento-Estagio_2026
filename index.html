@@ -917,12 +917,23 @@ function candidatesByVacancy(items){
 function vagasByCity(){
   const rows=CITIES.map(c=>({c,v:totalVagas(c),items:collectItems(c)})).filter(r=>r.v>0||r.items.some(i=>i.status||i.area||i.qtdCandidatos!==""));
   if(!rows.length)return "";
-  let body="",totV=0,totCand=0,totAdm=0;
-  rows.forEach(r=>{const adm=r.items.filter(i=>i.status==='Etapa de Admissão'||i.status==='Etapa de Assinatura de Contrato').length,cand=collectCandidates(r.items).length;totV+=r.v;totCand+=cand;totAdm+=adm;
-    body+=`<tr><td>${escapeHtml(r.c)}</td><td>${fmt(r.v)}</td><td>${fmt(cand)}</td><td>${fmt(r.items.filter(i=>i.status).length)}</td><td>${fmt(adm)}</td></tr>`;});
-  body+=`<tr class="tot"><td>TOTAL GERAL</td><td>${fmt(totV)}</td><td>${fmt(totCand)}</td><td>—</td><td>${fmt(totAdm)}</td></tr>`;
-  return `<div class="dcard"><h3><span class="bar"></span>Vagas por cidade</h3><div class="ch-sub">Vagas, candidatos e andamento por cidade.</div>
-    <div style="overflow-x:auto"><table class="tbl"><tr><th>Cidade</th><th>Vagas</th><th>Candidatos</th><th>Com status</th><th>Em admissão</th></tr>${body}</table></div></div>`;
+  const totals={vagas:0,candidatos:0,semStatus:0,status:{}};
+  STATUS_OPTS.forEach(s=>totals.status[s]=0);
+  const headStatus=STATUS_OPTS.map(s=>`<th>${escapeHtml(s)}</th>`).join('');
+  let body="";
+  rows.forEach(r=>{
+    const cand=collectCandidates(r.items).length;
+    const counts={};STATUS_OPTS.forEach(s=>counts[s]=r.items.filter(i=>i.status===s).length);
+    const semStatus=r.items.filter(i=>!i.status).length;
+    totals.vagas+=r.v;totals.candidatos+=cand;totals.semStatus+=semStatus;
+    STATUS_OPTS.forEach(s=>totals.status[s]+=counts[s]);
+    const statusCells=STATUS_OPTS.map(s=>`<td>${fmt(counts[s])}</td>`).join('');
+    body+=`<tr><td>${escapeHtml(r.c)}</td><td>${fmt(r.v)}</td><td>${fmt(cand)}</td>${statusCells}<td>${fmt(semStatus)}</td></tr>`;
+  });
+  const totalStatusCells=STATUS_OPTS.map(s=>`<td>${fmt(totals.status[s])}</td>`).join('');
+  body+=`<tr class="tot"><td>TOTAL GERAL</td><td>${fmt(totals.vagas)}</td><td>${fmt(totals.candidatos)}</td>${totalStatusCells}<td>${fmt(totals.semStatus)}</td></tr>`;
+  return `<div class="dcard"><h3><span class="bar"></span>Resumo executivo por cidade e status</h3><div class="ch-sub">Visão exata das vagas, candidatos e quantidade registrada em cada etapa do processo.</div>
+    <div style="overflow-x:auto"><table class="tbl"><tr><th>Cidade</th><th>Vagas</th><th>Candidatos</th>${headStatus}<th>Sem status</th></tr>${body}</table></div></div>`;
 }
 
 /* ---------- UTIL ---------- */
