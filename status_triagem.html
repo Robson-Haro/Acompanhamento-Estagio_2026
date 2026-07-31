@@ -704,6 +704,14 @@ bind('dropP1','fileP1','nameP1',f=>{const rd=new FileReader();rd.onload=e=>{
 bind('dropP2','fileP2','nameP2',f=>{Papa.parse(f,{header:false,delimiter:';',skipEmptyLines:true,complete:res=>{
   const data=res.data;if(!data.length){setStatus('P2 vazia.','err');return;}
   const hdr=data[0].map(h=>String(h||'').trim());
+  // A origem da candidatura vem sempre da coluna BV da P2 (índice 73, base zero).
+  // Não usamos o texto da pergunta para localizar esse dado, pois a posição/texto
+  // das perguntas pode variar entre exportações da Gupy.
+  const P2_CANAL_ORIGEM_BV=73;
+  if(hdr.length<=P2_CANAL_ORIGEM_BV){
+    setStatus('P2 incompatível: a coluna BV (Canal de origem) não foi encontrada.','err');
+    return;
+  }
   const H={};hdr.forEach((h,i)=>{if(!(h in H))H[h]=i;});
   const gi=n=>H[n]!==undefined?H[n]:-1;
   const pergIdx=hdr.map((h,i)=>i).filter(i=>norm(hdr[i]).indexOf('pergunta')===0);
@@ -718,7 +726,7 @@ bind('dropP2','fileP2','nameP2',f=>{Papa.parse(f,{header:false,delimiter:';',ski
       etapa:val(r,iG),statusVaga:val(r,iW),idioma:clean(val(r,iN)),inst:val(r,iQ),status:val(r,iS),curso:clean(val(r,iT)),
       grad:val(r,iU).slice(0,4),cityKey:(function(){var cc=canonCity(qa(r,'Selecione a cidade do Brasil onde voc\u00ea gostaria de trabalhar')),cm=canonCity(clean(val(r,iD)));return cc||cm;})(),cityAlt:(function(){var cc=canonCity(qa(r,'Selecione a cidade do Brasil onde voc\u00ea gostaria de trabalhar')),cm=canonCity(clean(val(r,iD)));return (cc&&cm&&cm!==cc)?cm:null;})(),
       area:qa(r,'Em qual \u00e1rea voc\u00ea gostaria de se candidatar'),
-      canal:qa(r,'Como voc\u00ea ficou sabendo dessa oportunidade')});}
+      canal:clean(val(r,P2_CANAL_ORIGEM_BV))});}
   setStatus('P2 lida ('+NEW_P2.length+' candidatos \u00fanicos por nome). Clique Recalcular.','ok');}});});
 function setStatus(t,c){const s=document.getElementById('uStatus');s.textContent=t;s.className='u-status '+(c||'');}
 document.getElementById('btnRecalc').addEventListener('click',async ()=>{
