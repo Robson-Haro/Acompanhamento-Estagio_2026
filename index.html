@@ -54,7 +54,10 @@ header.top::after{content:"";position:absolute;inset:0;background-image:linear-g
 .auth-submit{width:100%;border:0;border-radius:10px;background:var(--navy-deep);color:#fff;font:700 14px var(--display);padding:12px;cursor:pointer;margin-top:5px}
 .auth-submit:hover{background:var(--navy)}.auth-submit:disabled{opacity:.6;cursor:wait}
 .auth-msg{min-height:18px;color:var(--red-alert);font-size:12px;margin-top:11px;text-align:center}
-.auth-note{font-size:11px!important;margin:14px 0 0!important;text-align:center}
+.auth-msg.success{color:#2E9E5B}
+.auth-switch{width:100%;border:0;background:none;color:var(--navy);font:700 13px var(--display);padding:9px;cursor:pointer;margin-top:4px}
+.auth-switch:hover{text-decoration:underline}
+.auth-note{font-size:11px!important;margin:10px 0 0!important;text-align:center}
 
 nav.tabs{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:0 2px 12px rgba(26,41,66,.05)}
 .tabs-inner{display:flex;gap:4px;max-width:1240px;margin:0 auto;padding:0 16px;overflow-x:auto}
@@ -281,14 +284,16 @@ footer b{color:#fff;font-family:var(--display)}
 </head>
 <body>
 <div class="auth-gate" id="authGate">
-  <form class="auth-card" id="authForm" onsubmit="signIn(event)">
-    <h2>Acesso restrito</h2>
-    <p>Entre com o usuário autorizado para acessar os dados compartilhados do Programa de Estágio.</p>
-    <div class="auth-field"><label for="authEmail">E-mail corporativo</label><input id="authEmail" type="email" autocomplete="username" required></div>
-    <div class="auth-field"><label for="authPassword">Senha</label><input id="authPassword" type="password" autocomplete="current-password" required></div>
+  <form class="auth-card" id="authForm" onsubmit="submitAuth(event)">
+    <h2 id="authTitle">Acesso restrito</h2>
+    <p id="authDescription">Entre com seu e-mail corporativo para acessar os dados compartilhados do Programa de Estágio.</p>
+    <div class="auth-field"><label for="authEmail">E-mail corporativo</label><input id="authEmail" type="email" autocomplete="username" placeholder="nome@minervafoods.com" required></div>
+    <div class="auth-field"><label for="authPassword">Senha</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></div>
+    <div class="auth-field" id="confirmField" style="display:none"><label for="authConfirm">Confirmar senha</label><input id="authConfirm" type="password" autocomplete="new-password" minlength="8"></div>
     <button class="auth-submit" id="authSubmit" type="submit">Entrar</button>
+    <button class="auth-switch" id="authSwitch" type="button" onclick="toggleAuthMode()">Criar meu cadastro</button>
     <div class="auth-msg" id="authMsg"></div>
-    <p class="auth-note">Apenas usuários cadastrados pelo administrador podem entrar.</p>
+    <p class="auth-note">Cadastro permitido somente para e-mails <b>@minervafoods.com</b>.</p>
   </form>
 </div>
 
@@ -555,13 +560,43 @@ function hideAuth(){
   const gate=document.getElementById('authGate');if(gate)gate.classList.add('hidden');
   const out=document.getElementById('logoutBtn');if(out)out.style.display="";
 }
-async function signIn(ev){
-  ev.preventDefault();const btn=document.getElementById('authSubmit'),msg=document.getElementById('authMsg');
-  btn.disabled=true;msg.textContent="Conectando…";
-  const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;
+let authMode="login";
+function isMinervaEmail(email){return /^[^@\s]+@minervafoods\.com$/i.test(String(email||"").trim());}
+function toggleAuthMode(forceMode){
+  authMode=forceMode||((authMode==="login")?"register":"login");
+  const register=authMode==="register",msg=document.getElementById('authMsg');
+  document.getElementById('authTitle').textContent=register?"Criar cadastro":"Acesso restrito";
+  document.getElementById('authDescription').textContent=register?"Cadastre seu e-mail corporativo e crie uma senha de acesso.":"Entre com seu e-mail corporativo para acessar os dados compartilhados do Programa de Estágio.";
+  document.getElementById('authSubmit').textContent=register?"Criar cadastro":"Entrar";
+  document.getElementById('authSwitch').textContent=register?"Já tenho cadastro":"Criar meu cadastro";
+  document.getElementById('confirmField').style.display=register?"block":"none";
+  document.getElementById('authConfirm').required=register;
+  msg.textContent="";msg.classList.remove('success');
+}
+async function submitAuth(ev){
+  ev.preventDefault();
+  const btn=document.getElementById('authSubmit'),msg=document.getElementById('authMsg');
+  const email=document.getElementById('authEmail').value.trim().toLowerCase();
+  const password=document.getElementById('authPassword').value;
+  msg.classList.remove('success');
+  if(!isMinervaEmail(email)){msg.textContent="Use exclusivamente seu e-mail @minervafoods.com.";return;}
+  if(password.length<8){msg.textContent="A senha deve ter pelo menos 8 caracteres.";return;}
+  btn.disabled=true;
+  if(authMode==="register"){
+    const confirm=document.getElementById('authConfirm').value;
+    if(password!==confirm){btn.disabled=false;msg.textContent="As senhas não são iguais.";return;}
+    msg.textContent="Criando cadastro…";
+    const {data,error}=await sb.auth.signUp({email,password});
+    btn.disabled=false;
+    if(error){msg.textContent=error.message&&error.message.toLowerCase().includes("already")?"Este e-mail já possui cadastro.":("Não foi possível criar o cadastro: "+error.message);return;}
+    if(data.session){msg.textContent="";return;}
+    toggleAuthMode("login");msg.classList.add('success');msg.textContent="Cadastro criado. Confirme o e-mail recebido antes de entrar.";
+    return;
+  }
+  msg.textContent="Conectando…";
   const {error}=await sb.auth.signInWithPassword({email,password});
   btn.disabled=false;
-  if(error){msg.textContent="E-mail ou senha inválidos.";return;}
+  if(error){msg.textContent="E-mail ou senha inválidos, ou cadastro ainda não confirmado.";return;}
   msg.textContent="";
 }
 async function signOut(){if(sb)await sb.auth.signOut();showAuth("Sessão encerrada.");}
