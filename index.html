@@ -1042,9 +1042,31 @@ function initNotes(){const ta=document.getElementById('freeNotes');ta.value=S.no
 /* ---------- IMPORT/EXPORT/RESET ---------- */
 function exportJSON(){const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download="minerva_processo_seletivo_estagio2026.json";a.click();toast('Dados exportados');}
-function importJSON(ev){const f=ev.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{S=Object.assign(blank(),JSON.parse(r.result));save();renderAll();toast('Dados importados');}catch(e){toast('Arquivo inválido');}};
-  r.readAsText(f);ev.target.value="";}
+function importJSON(ev){
+  const input=ev.target,f=input.files[0];if(!f)return;
+  if(!shared||!sb){toast('Entre no modo compartilhado antes de importar');input.value="";return;}
+  const r=new FileReader();
+  r.onload=async()=>{
+    try{
+      const parsed=JSON.parse(r.result);
+      if(!parsed||typeof parsed!=="object"||!parsed.cidades)throw new Error("Estrutura inválida");
+      const imported=Object.assign(blank(),parsed);
+      imported.meta=Object.assign({},imported.meta,{updated:new Date().toISOString(),writer:clientId});
+      clearTimeout(sbTimer);
+      const {error}=await sb.from('app_state').upsert({id:ROW_ID,data:imported,updated_at:new Date().toISOString()});
+      if(error)throw error;
+      S=imported;
+      try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+      renderAll();
+      toast('Importação confirmada no banco compartilhado');
+    }catch(e){
+      console.warn('Falha ao importar:',e&&e.message);
+      toast('Falha na importação: os dados anteriores foram preservados');
+    }finally{input.value="";}
+  };
+  r.onerror=()=>{toast('Não foi possível ler o arquivo');input.value="";};
+  r.readAsText(f);
+}
 function resetAll(){if(!confirm('Isso apaga TODOS os registros (cronograma, dados, status das cidades e anotações). Continuar?'))return;
   S=blank();save();renderAll();toast('Sistema reiniciado');}
 
