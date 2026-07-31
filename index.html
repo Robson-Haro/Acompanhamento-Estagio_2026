@@ -44,6 +44,17 @@ header.top::after{content:"";position:absolute;inset:0;background-image:linear-g
 .mode{font-family:var(--display);font-weight:700;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:20px}
 .mode.shared{background:rgba(46,158,91,.22);color:#9DEBBC;border:1px solid rgba(46,158,91,.4)}
 .mode.local{background:rgba(201,168,76,.18);color:#EBD79A;border:1px solid rgba(201,168,76,.4)}
+.auth-gate{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#1A2942 0%,#23405f 65%,#2B5373 100%);display:grid;place-items:center;padding:24px}
+.auth-gate.hidden{display:none}
+.auth-card{width:min(430px,100%);background:#fff;border-radius:18px;padding:30px;box-shadow:0 24px 70px rgba(0,0,0,.35);border-top:5px solid var(--coral)}
+.auth-card h2{color:var(--navy-deep);font-size:23px;margin-bottom:7px}.auth-card p{color:var(--ink-soft);font-size:13px;margin-bottom:20px}
+.auth-field{margin-bottom:13px}.auth-field label{display:block;font-size:12px;font-weight:700;color:var(--navy-deep);margin-bottom:5px}
+.auth-field input{width:100%;font:500 14px var(--body);padding:11px 13px;border:1px solid var(--line);border-radius:9px}
+.auth-field input:focus{outline:none;border-color:var(--slate);box-shadow:0 0 0 3px rgba(87,124,151,.14)}
+.auth-submit{width:100%;border:0;border-radius:10px;background:var(--navy-deep);color:#fff;font:700 14px var(--display);padding:12px;cursor:pointer;margin-top:5px}
+.auth-submit:hover{background:var(--navy)}.auth-submit:disabled{opacity:.6;cursor:wait}
+.auth-msg{min-height:18px;color:var(--red-alert);font-size:12px;margin-top:11px;text-align:center}
+.auth-note{font-size:11px!important;margin:14px 0 0!important;text-align:center}
 
 nav.tabs{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:0 2px 12px rgba(26,41,66,.05)}
 .tabs-inner{display:flex;gap:4px;max-width:1240px;margin:0 auto;padding:0 16px;overflow-x:auto}
@@ -269,6 +280,17 @@ footer b{color:#fff;font-family:var(--display)}
 </style>
 </head>
 <body>
+<div class="auth-gate" id="authGate">
+  <form class="auth-card" id="authForm" onsubmit="signIn(event)">
+    <h2>Acesso restrito</h2>
+    <p>Entre com o usuário autorizado para acessar os dados compartilhados do Programa de Estágio.</p>
+    <div class="auth-field"><label for="authEmail">E-mail corporativo</label><input id="authEmail" type="email" autocomplete="username" required></div>
+    <div class="auth-field"><label for="authPassword">Senha</label><input id="authPassword" type="password" autocomplete="current-password" required></div>
+    <button class="auth-submit" id="authSubmit" type="submit">Entrar</button>
+    <div class="auth-msg" id="authMsg"></div>
+    <p class="auth-note">Apenas usuários cadastrados pelo administrador podem entrar.</p>
+  </form>
+</div>
 
 <header class="top">
   <div class="top-inner">
@@ -283,6 +305,7 @@ footer b{color:#fff;font-family:var(--display)}
       <button class="hbtn" onclick="document.getElementById('imp').click()">⭱ Importar</button>
       <input type="file" id="imp" accept="application/json" style="display:none" onchange="importJSON(event)">
       <button class="hbtn warn" onclick="resetAll()">↺ Reiniciar</button>
+      <button class="hbtn" id="logoutBtn" onclick="signOut()" style="display:none">Sair</button>
       <span class="saved"><span class="mode local" id="modeBadge">Modo local</span><span id="savedAt"></span></span>
     </div>
   </div>
@@ -410,8 +433,8 @@ footer b{color:#fff;font-family:var(--display)}
    Para que TODOS vejam o mesmo andamento por um único link, preencha
    abaixo com os dados do seu projeto Supabase (Settings > API).
    Enquanto estiver em branco, o sistema funciona em MODO LOCAL.        */
-const SB_URL = "";   // ex.: "https://xxxxxxxx.supabase.co"
-const SB_KEY = "";   // anon public key
+const SB_URL = "https://qupjdahdbuyzhqzjanxf.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1cGpkYWhkYnV5emhxemphbnhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMTg5NDMsImV4cCI6MjA5NTc5NDk0M30.M6pB909UaX2Z8rz5tyxgF7sC6UXkX4dzW50ZUzwrBhI";   // chave pública anon
 const ROW_ID = "estagio_2026";
 /* =================================================================== */
 
@@ -494,7 +517,7 @@ const RACA_COLORS={"Branco":"#577C97","Negro":"#1A2942","Pardo":"#BDB68C","Indí
 /* ---------- ESTADO ---------- */
 const KEY="minerva_ps_estagio2026_v2";
 const clientId="c"+Math.random().toString(36).slice(2);
-let sb=null, shared=false, applyingRemote=false;
+let sb=null, shared=false, applyingRemote=false, rtChannel=null;
 function blank(){return {stages:{},crono:{},cronoDates:{},cronoCustom:[],dados:{},cidades:{},notes:"",meta:{updated:null,writer:null}};}
 function loadLocal(){try{const raw=localStorage.getItem(KEY);if(raw)return Object.assign(blank(),JSON.parse(raw));}catch(e){}return blank();}
 let S=loadLocal();
@@ -508,9 +531,9 @@ function save(quiet){
   if(shared&&sb){clearTimeout(sbTimer);sbTimer=setTimeout(pushRemote,500);}
 }
 function pushRemote(){
-  if(!sb)return;
+  if(!sb||!shared){toast('Sem conexão: alteração salva apenas neste navegador');return;}
   sb.from('app_state').upsert({id:ROW_ID,data:S,updated_at:new Date().toISOString()})
-    .then(r=>{if(r&&r.error)console.warn('upsert',r.error);});
+    .then(r=>{if(r&&r.error){console.warn('upsert',r.error);setMode(false);toast('Falha ao sincronizar com o banco');}});
 }
 function renderSaved(){
   const el=document.getElementById('savedAt');if(!el)return;
@@ -520,20 +543,39 @@ function renderSaved(){
 function setMode(isShared){
   shared=isShared;const b=document.getElementById('modeBadge');if(!b)return;
   b.className="mode "+(isShared?"shared":"local");
-  b.textContent=isShared?"Compartilhado (tempo real)":"Modo local";
+  b.textContent=isShared?"Compartilhado (tempo real)":"Desconectado";
 }
-function toast(msg){const t=document.getElementById('toast');document.getElementById('toast-msg').textContent=msg||'Salvo';t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800);}
-
-/* ---------- BACKEND SUPABASE ---------- */
-async function initBackend(){
-  if(!(SB_URL&&SB_KEY&&window.supabase)){setMode(false);return;}
+function showAuth(message){
+  setMode(false);
+  const gate=document.getElementById('authGate'),msg=document.getElementById('authMsg');
+  if(gate)gate.classList.remove('hidden');if(msg)msg.textContent=message||"";
+  const out=document.getElementById('logoutBtn');if(out)out.style.display="none";
+}
+function hideAuth(){
+  const gate=document.getElementById('authGate');if(gate)gate.classList.add('hidden');
+  const out=document.getElementById('logoutBtn');if(out)out.style.display="";
+}
+async function signIn(ev){
+  ev.preventDefault();const btn=document.getElementById('authSubmit'),msg=document.getElementById('authMsg');
+  btn.disabled=true;msg.textContent="Conectando…";
+  const email=document.getElementById('authEmail').value.trim(),password=document.getElementById('authPassword').value;
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  btn.disabled=false;
+  if(error){msg.textContent="E-mail ou senha inválidos.";return;}
+  msg.textContent="";
+}
+async function signOut(){if(sb)await sb.auth.signOut();showAuth("Sessão encerrada.");}
+async function connectShared(){
   try{
-    sb=window.supabase.createClient(SB_URL,SB_KEY);
     const {data,error}=await sb.from('app_state').select('data').eq('id',ROW_ID).maybeSingle();
     if(error)throw error;
     if(data&&data.data){applyingRemote=true;S=Object.assign(blank(),data.data);applyingRemote=false;}
-    else{await sb.from('app_state').upsert({id:ROW_ID,data:S,updated_at:new Date().toISOString()});}
-    sb.channel('rt-'+ROW_ID).on('postgres_changes',
+    else{
+      const created=await sb.from('app_state').upsert({id:ROW_ID,data:S,updated_at:new Date().toISOString()});
+      if(created.error)throw created.error;
+    }
+    if(rtChannel)await sb.removeChannel(rtChannel);
+    rtChannel=sb.channel('rt-'+ROW_ID).on('postgres_changes',
       {event:'*',schema:'public',table:'app_state',filter:'id=eq.'+ROW_ID},
       payload=>{
         const nd=payload.new&&payload.new.data;
@@ -542,8 +584,25 @@ async function initBackend(){
           renderAll();toast('Atualizado por outro usuário');
         }
       }).subscribe();
-    setMode(true);renderAll();
-  }catch(e){console.warn('Supabase indisponível, modo local:',e&&e.message);setMode(false);}
+    setMode(true);hideAuth();renderAll();
+  }catch(e){
+    console.warn('Falha na sincronização:',e&&e.message);
+    showAuth("Não foi possível acessar o banco. Confira o usuário e tente novamente.");
+  }
+}
+function toast(msg){const t=document.getElementById('toast');document.getElementById('toast-msg').textContent=msg||'Salvo';t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1800);}
+
+/* ---------- BACKEND SUPABASE ---------- */
+async function initBackend(){
+  if(!(SB_URL&&SB_KEY&&window.supabase)){showAuth("Configuração do banco indisponível.");return;}
+  sb=window.supabase.createClient(SB_URL,SB_KEY);
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(event==="SIGNED_IN"&&session)connectShared();
+    if(event==="SIGNED_OUT")showAuth();
+  });
+  const {data,error}=await sb.auth.getSession();
+  if(error){showAuth("Não foi possível verificar a sessão.");return;}
+  if(data.session)await connectShared();else showAuth();
 }
 
 /* ---------- TABS ---------- */
