@@ -273,6 +273,13 @@ main{padding:34px 0 90px}
 .donut-row .dot{width:10px;height:10px;border-radius:50%}
 .donut-row b{font-family:var(--display);color:var(--navy-deep)}
 .div-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
+.exec-panel{margin-bottom:18px}.exec-city{margin-top:16px}.exec-city:first-child{margin-top:0}
+.exec-city-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;font:800 14px var(--display);color:var(--navy-deep)}
+.exec-city-title span{font:600 11px var(--body);color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);padding:3px 9px;border-radius:20px}
+.status-pill{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-weight:700;font-size:11px;padding:4px 9px;border-radius:20px;background:#EEF1F4;color:var(--navy-deep)}
+.status-light{width:9px;height:9px;border-radius:50%;background:#9AA7B2;box-shadow:inset 0 0 2px rgba(0,0,0,.2)}
+.status-pill.admission{background:rgba(46,158,91,.12);color:#237947}.status-pill.admission .status-light{background:var(--st-done);box-shadow:0 0 9px rgba(46,158,91,.85)}
+.area-select{width:100%;font:500 13px var(--body);padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
 
 footer{background:var(--navy-deep);color:#9FB3C2;text-align:center;padding:22px;font-size:12px;border-top:4px solid var(--coral)}
 footer b{color:#fff;font-family:var(--display)}
@@ -503,7 +510,7 @@ const GESTORES = [
   {id:"g3", n:"3ª Etapa", cidades:"Rolim de Moura, São Gabriel, São Paulo e Tangará da Serra", d:"De 17/08 a 21/08"}
 ];
 
-const CITIES = ["Araguaína","Bagé","Barretos","Campinas","Mineiros","Palmeiras","Paranatinga","Rolim de Moura","São Gabriel","São Paulo","Tangará da Serra"];
+const CITIES = ["Araguaína","Bagé","Barretos","Campinas","Mineiros","Palmeiras de Goiás","Paranatinga","Rolim de Moura","São Gabriel","São Paulo","Tangará da Serra"];
 const FUNNEL_FIELDS = [
   {id:"candidaturas",label:"Candidaturas (inscritos)",color:"#577C97"},
   {id:"bigfive",label:"Teste Big Five realizados",color:"#BDB68C"},
@@ -512,8 +519,19 @@ const FUNNEL_FIELDS = [
   {id:"gestor",label:"Entrevistas com Gestor",color:"#E84C53"},
   {id:"aprovados",label:"Aprovados / Admissão",color:"#2E9E5B"}
 ];
-const STATUS_OPTS=["Entrevista Gestor","Reprovado G&G","Reprovado Gestor","Declinou","Etapa de Admissão","Etapa de Assinatura de Contrato"];
-const STATUS_COLORS={"Entrevista Gestor":"#577C97","Reprovado G&G":"#D23B43","Reprovado Gestor":"#C91926","Declinou":"#9AA7B2","Etapa de Admissão":"#C9A84C","Etapa de Assinatura de Contrato":"#2E9E5B"};
+const STATUS_OPTS=["Triagem","Entrevista G&G","Entrevista Gestor","Reprovado G&G","Reprovado Gestor","Declinou","Etapa de Admissão","Etapa de Assinatura de Contrato"];
+const STATUS_COLORS={"Triagem":"#1A2942","Entrevista G&G":"#C9A84C","Entrevista Gestor":"#577C97","Reprovado G&G":"#D23B43","Reprovado Gestor":"#C91926","Declinou":"#9AA7B2","Etapa de Admissão":"#2E9E5B","Etapa de Assinatura de Contrato":"#2E9E5B"};
+const PROGRAM_AREAS={
+  "Bagé":["Gestão e Custos"],
+  "Barretos":["Sustentabilidade - bem estar","Backoffice Jurídico","Cambio e Exportação","Contas a Receber","Contas a Receber","Fiscal Tributário","Engenharia","Engenharia","Engenharia","Compras de Insumos - almoxarifado e projetos","Compras de Insumos - capex","Logística Gado","Logística ME","Gente e Gestão - Adm Pessoal","Logística - Faturamento Saída","Projetos","Cabine Fiscal","PCM"],
+  "Campinas":["Logística MI","Logística Negócios Relacionados","Engenharia Logística","Logística Abastecimento","Logística MI","Backoffice Exportação","Backoffice Exportação","Backoffice Exportação","Backoffice Exportação"],
+  "Palmeiras de Goiás":["Engenharia","Compra Gado","Biodiesel","Manutenção"],
+  "Paranatinga":["Qualidade"],
+  "Rolim de Moura":["Compra Gado","Qualidade","Manutenção","Produção"],
+  "São Gabriel":["Administrativo"],
+  "São Paulo":["Business Inteligence","Marketing","My Carbon - Projetos","Minerva Energy - Administrativo"],
+  "Tangará da Serra":["Engenharia","Controle de Qualidade","Produção"]
+};
 const GENERO_OPTS=["Masculino","Feminino"];
 const GENERO_COLORS={"Masculino":"#2B5373","Feminino":"#E84C53"};
 const RACA_OPTS=["Branco","Negro","Pardo","Indígena","Asiático"];
@@ -608,6 +626,12 @@ async function connectShared(){
     else{
       const created=await sb.from('app_state').upsert({id:ROW_ID,data:S,updated_at:new Date().toISOString()});
       if(created.error)throw created.error;
+    }
+    if(migrateProgramData()){
+      S.meta.updated=new Date().toISOString();S.meta.writer=clientId;
+      const migrated=await sb.from('app_state').upsert({id:ROW_ID,data:S,updated_at:S.meta.updated});
+      if(migrated.error)throw migrated.error;
+      try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
     }
     if(rtChannel)await sb.removeChannel(rtChannel);
     rtChannel=sb.channel('rt-'+ROW_ID).on('postgres_changes',
@@ -859,6 +883,22 @@ function shortLabel(id){return({candidaturas:"Candid.",bigfive:"Big Five",triage
 
 /* ---------- STATUS DAS CIDADES (entrada por vaga) ---------- */
 function cityRec(c){if(!S.cidades[c])S.cidades[c]={vagas:"",items:[]};if(!S.cidades[c].items)S.cidades[c].items=[];return S.cidades[c];}
+function migrateProgramData(){
+  let changed=false;
+  if(S.cidades.Palmeiras&&!S.cidades["Palmeiras de Goiás"]){S.cidades["Palmeiras de Goiás"]=S.cidades.Palmeiras;changed=true;}
+  Object.entries(PROGRAM_AREAS).forEach(([city,areas])=>{
+    const r=cityRec(city);
+    if((parseInt(r.vagas,10)||0)!==areas.length){r.vagas=areas.length;changed=true;}
+    while(r.items.length<areas.length){r.items.push({area:"",status:"",qtdCandidatos:"",candidatos:[]});changed=true;}
+    areas.forEach((area,i)=>{
+      const it=normalizeVaga(r.items[i]);
+      if(!areas.includes(String(it.area||"").trim())){it.area=area;changed=true;}
+      if(!String(it.status||"").trim()){it.status="Triagem";changed=true;}
+    });
+  });
+  if(S.meta.programAreasVersion!==1){S.meta.programAreasVersion=1;changed=true;}
+  return changed;
+}
 function normalizeVaga(it){
   if(!it)return {area:"",status:"",qtdCandidatos:"",candidatos:[]};
   if(!Array.isArray(it.candidatos))it.candidatos=[];
@@ -900,7 +940,7 @@ function vagaBlocks(c,n){
     const qtd=it.qtdCandidatos===""?"":Math.max(0,parseInt(it.qtdCandidatos,10)||0);
     html+=`<div class="vaga">
       <div class="vh"><span class="num">${k+1}</span> Vaga ${k+1}</div>
-      <div class="ffield"><label>Área</label><input type="text" value="${escapeAttr(it.area||'')}" placeholder="Ex.: Operações" oninput="setVaga('${escapeAttr(c)}',${k},'area',this.value)"/></div>
+      <div class="ffield"><label>Área</label>${areaField(c,k,it.area)}</div>
       <div class="ffield"><label>Status</label><select onchange="setVaga('${escapeAttr(c)}',${k},'status',this.value)">${optList(STATUS_OPTS,it.status)}</select></div>
       <div class="ffield"><label>Quantidade de candidatos nesta vaga</label><input type="number" min="0" inputmode="numeric" value="${qtd}" placeholder="0" oninput="setQtdCandidatos('${escapeAttr(c)}',${k},this.value)"/></div>
       <div class="candidates-wrap">
@@ -910,6 +950,12 @@ function vagaBlocks(c,n){
     </div>`;
   }
   return html;
+}
+function areaField(c,k,current){
+  const opts=PROGRAM_AREAS[c];
+  if(!opts)return `<input type="text" value="${escapeAttr(current||'')}" placeholder="Ex.: Operações" oninput="setVaga('${escapeAttr(c)}',${k},'area',this.value)"/>`;
+  const unique=[...new Set(opts)];
+  return `<select class="area-select" onchange="setVaga('${escapeAttr(c)}',${k},'area',this.value)">${unique.map(a=>`<option value="${escapeAttr(a)}" ${a===current?'selected':''}>${escapeHtml(a)}</option>`).join('')}</select>`;
 }
 function cityKey(c){return String(c).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'-');}
 function candidateBlocks(c,k,qtd){
@@ -987,12 +1033,32 @@ function renderDiversity(){
     <div class="kpi" style="--accent:#2E9E5B"><div class="k">Em admissão/contrato</div><div class="v">${fmt(inAdm)}</div><div class="s">status final</div></div>
     <div class="kpi" style="--accent:#D23B43"><div class="k">Reprovados/Declínios</div><div class="v">${fmt(repDecl)}</div><div class="s">saídas do processo</div></div>
   </div>`;
+  html+=executiveAreasPanel(city);
   html+=columnCard("Distribuição por Status",items,"status",STATUS_OPTS,STATUS_COLORS,"vagas");
   html+=donutCard("Distribuição por Gênero",candidatos,"genero",GENERO_OPTS,GENERO_COLORS);
   html+=columnCard("Distribuição por Raça/Cor",candidatos,"raca",RACA_OPTS,RACA_COLORS,"candidatos");
   html+=candidatesByVacancy(items);
   if(city==="__geral__")html+=vagasByCity();
   area.innerHTML=html;
+}
+function isAdmissionStatus(status){return status==='Etapa de Admissão'||status==='Etapa de Assinatura de Contrato';}
+function statusPill(status){
+  const value=status||'Triagem',admission=isAdmissionStatus(value);
+  return `<span class="status-pill ${admission?'admission':''}"><span class="status-light"></span>${escapeHtml(value)}</span>`;
+}
+function executiveAreasPanel(city){
+  const cities=city==='__geral__'?Object.keys(PROGRAM_AREAS):(PROGRAM_AREAS[city]?[city]:[]);
+  if(!cities.length)return '';
+  const sections=cities.map(c=>{
+    const r=cityRec(c),n=PROGRAM_AREAS[c].length;
+    const rows=PROGRAM_AREAS[c].map((area,i)=>{
+      const it=normalizeVaga(r.items[i]||{area,status:'Triagem',qtdCandidatos:'',candidatos:[]});
+      const qtd=Math.max(0,parseInt(it.qtdCandidatos,10)||0);
+      return `<tr><td>${escapeHtml(area)}</td><td>${statusPill(it.status)}</td><td>${fmt(qtd)}</td></tr>`;
+    }).join('');
+    return `<div class="exec-city"><div class="exec-city-title">${escapeHtml(c)}<span>${n} vaga${n===1?'':'s'}</span></div><div style="overflow-x:auto"><table class="tbl"><tr><th>Área</th><th>Status</th><th>Candidatos</th></tr>${rows}</table></div></div>`;
+  }).join('');
+  return `<div class="dcard exec-panel"><h3><span class="bar"></span>Painel executivo por cidade, área e status</h3><div class="ch-sub">Atualização automática a partir dos blocos de vagas. A luz verde identifica as áreas em admissão ou assinatura de contrato.</div>${sections}</div>`;
 }
 function distribution(items,field,opts){
   const counts={};opts.forEach(o=>counts[o]=0);let tot=0;
@@ -1092,4 +1158,3 @@ initBackend();
 </script>
 </body>
 </html>
-
