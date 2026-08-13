@@ -274,6 +274,34 @@ main{padding:34px 0 90px}
 .donut-row b{font-family:var(--display);color:var(--navy-deep)}
 .div-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
 
+/* PAINEL EXECUTIVO — cobertura de candidatos por cidade e área */
+.exec-panel{background:linear-gradient(145deg,#fff 0%,#F7F9FB 100%);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:20px;margin-bottom:24px}
+.exec-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+.exec-panel-head h3{font-size:18px;color:var(--navy-deep);display:flex;align-items:center;gap:10px}
+.exec-panel-head h3 .bar{width:5px;height:22px;background:var(--coral);border-radius:3px}
+.exec-panel-head p{font-size:12.5px;color:var(--ink-soft);margin-top:5px}
+.exec-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.exec-legend span{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--ink-soft);font-weight:600}
+.exec-led{width:13px;height:13px;border-radius:50%;display:inline-block;flex:0 0 auto;border:1px solid rgba(26,41,66,.12)}
+.exec-led.red{background:#D23B43;box-shadow:0 0 10px rgba(210,59,67,.65)}
+.exec-led.yellow{background:#F2C94C;box-shadow:0 0 10px rgba(242,201,76,.7)}
+.exec-led.green{background:#2E9E5B;box-shadow:0 0 10px rgba(46,158,91,.65)}
+.exec-led.neutral{background:#A7B3BE;box-shadow:0 0 8px rgba(87,124,151,.35)}
+.exec-summary{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+@media(max-width:680px){.exec-summary{grid-template-columns:1fr}.exec-panel{padding:16px}}
+.exec-stat{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.exec-stat .num{font:800 24px var(--display);color:var(--navy-deep);line-height:1}
+.exec-stat .txt{font-size:11.5px;color:var(--ink-soft);line-height:1.25}
+.exec-groups{display:grid;gap:14px}
+.exec-city{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}
+.exec-city-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;background:#F7F9FB;border-bottom:1px solid var(--line)}
+.exec-city-head b{font:800 13px var(--display);color:var(--navy-deep)}
+.exec-city-head small{font-size:10.5px;color:var(--ink-soft)}
+.exec-areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:9px;padding:11px}
+.exec-area{display:grid;grid-template-columns:16px 1fr;gap:9px;align-items:start;border:1px solid var(--line);border-radius:9px;padding:10px;background:#fff}
+.exec-area .area-name{font:700 12px var(--display);color:var(--navy-deep);line-height:1.25}
+.exec-area .area-meta{font-size:10.5px;color:var(--ink-soft);margin-top:3px;line-height:1.3}
+
 footer{background:var(--navy-deep);color:#9FB3C2;text-align:center;padding:22px;font-size:12px;border-top:4px solid var(--coral)}
 footer b{color:#fff;font-family:var(--display)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy-deep);color:#fff;padding:12px 22px;border-radius:30px;font-size:13px;font-family:var(--display);font-weight:600;box-shadow:var(--shadow-lg);z-index:200;opacity:0;transition:.3s;border:1px solid rgba(255,255,255,.15)}
@@ -386,6 +414,8 @@ footer b{color:#fff;font-family:var(--display)}
       <h2><span class="bar"></span>Dados do Programa — Dashboard</h2>
       <p>Selecione a cidade (ou <b>Geral</b>) para ver o funil e os indicadores de status e diversidade. Mais abaixo, registre as vagas e o status de cada cidade.</p>
     </div>
+
+    <div id="executiveCoverage"></div>
 
     <div class="dash-grid">
       <div class="inputs-card">
@@ -971,7 +1001,68 @@ function totalVagas(city){
   if(city==="__geral__"){let t=0;CITIES.forEach(c=>{const r=S.cidades[c];t+=parseInt(r&&r.vagas,10)||0;});return t;}
   const r=S.cidades[city];return parseInt(r&&r.vagas,10)||0;
 }
+
+/* ---------- PAINEL EXECUTIVO: CIDADE × ÁREA ---------- */
+function coverageRows(){
+  const rows=[];
+  CITIES.forEach(city=>{
+    const rec=S.cidades[city];
+    if(!rec||!Array.isArray(rec.items))return;
+    const limit=Math.max(0,parseInt(rec.vagas,10)||0);
+    const grouped={};
+    rec.items.slice(0,limit).forEach(raw=>{
+      const item=normalizeVaga(raw);
+      const area=(item.area||'').trim()||'Área não informada';
+      const key=area.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+      if(!grouped[key])grouped[key]={city,area,vagas:0,candidates:0,statuses:[]};
+      const row=grouped[key];row.vagas++;
+      const qtd=Math.max(0,parseInt(item.qtdCandidatos,10)||0);
+      const candidates=(item.candidatos||[]).slice(0,qtd);
+      row.candidates+=qtd;
+      const candidateStatuses=candidates.map(c=>c&&c.status).filter(Boolean);
+      row.statuses.push(...candidateStatuses);
+      /* Compatibilidade com registros antigos que tinham o status apenas na vaga. */
+      if(qtd>0&&!candidateStatuses.length&&item.status)row.statuses.push(item.status);
+    });
+    Object.values(grouped).forEach(row=>{
+      const inAdmission=row.statuses.some(s=>s==='Etapa de Admissão'||s==='Etapa de Assinatura de Contrato');
+      const withManager=row.statuses.some(s=>s==='Entrevista Gestor');
+      if(inAdmission)row.signal='green';
+      else if(withManager)row.signal='yellow';
+      else if(row.candidates===0)row.signal='red';
+      else row.signal='neutral';
+      rows.push(row);
+    });
+  });
+  return rows;
+}
+function coverageLabel(signal){
+  return ({green:'Em admissão',yellow:'Entrevista Gestor',red:'Sem candidatos',neutral:'Candidatos em outras etapas'})[signal];
+}
+function renderExecutiveCoverage(){
+  const wrap=document.getElementById('executiveCoverage');if(!wrap)return;
+  const rows=coverageRows();
+  if(!rows.length){
+    wrap.innerHTML=`<div class="exec-panel"><div class="exec-panel-head"><div><h3><span class="bar"></span>Painel Executivo — Cobertura por Cidade e Área</h3><p>Os faróis serão calculados automaticamente após o cadastro das vagas, áreas e candidatos.</p></div></div><div class="empty">Nenhuma cidade e área registrada até o momento.</div></div>`;
+    return;
+  }
+  const totals={red:0,yellow:0,green:0};rows.forEach(r=>{if(totals[r.signal]!=null)totals[r.signal]++;});
+  const cityBlocks=CITIES.map(city=>{
+    const cityRows=rows.filter(r=>r.city===city);if(!cityRows.length)return '';
+    const areas=cityRows.map(r=>`<div class="exec-area"><span class="exec-led ${r.signal}" title="${coverageLabel(r.signal)}"></span><div><div class="area-name">${escapeHtml(r.area)}</div><div class="area-meta">${coverageLabel(r.signal)} · ${fmt(r.candidates)} candidato${r.candidates===1?'':'s'} · ${fmt(r.vagas)} vaga${r.vagas===1?'':'s'}</div></div></div>`).join('');
+    return `<section class="exec-city"><div class="exec-city-head"><b>${escapeHtml(city)}</b><small>${cityRows.length} área${cityRows.length===1?'':'s'}</small></div><div class="exec-areas">${areas}</div></section>`;
+  }).join('');
+  wrap.innerHTML=`<div class="exec-panel">
+    <div class="exec-panel-head"><div><h3><span class="bar"></span>Painel Executivo — Cobertura por Cidade e Área</h3><p>Leitura automática dos candidatos registrados nas vagas. Verde prevalece sobre amarelo quando houver candidatos em etapas diferentes.</p></div>
+      <div class="exec-legend"><span><i class="exec-led red"></i>Sem candidatos</span><span><i class="exec-led yellow"></i>Entrevista Gestor</span><span><i class="exec-led green"></i>Admissão</span><span><i class="exec-led neutral"></i>Outras etapas</span></div></div>
+    <div class="exec-summary">
+      <div class="exec-stat"><i class="exec-led red"></i><div class="num">${totals.red}</div><div class="txt">cidade/área<br>sem candidatos</div></div>
+      <div class="exec-stat"><i class="exec-led yellow"></i><div class="num">${totals.yellow}</div><div class="txt">cidade/área com<br>Entrevista Gestor</div></div>
+      <div class="exec-stat"><i class="exec-led green"></i><div class="num">${totals.green}</div><div class="txt">cidade/área<br>em admissão</div></div>
+    </div><div class="exec-groups">${cityBlocks}</div></div>`;
+}
 function renderDiversity(){
+  renderExecutiveCoverage();
   const city=document.getElementById('citySel').value,area=document.getElementById('diversityArea');
   const items=collectItems(city),candidatos=collectCandidates(items),vagas=totalVagas(city);
   const preenchidos=items.filter(it=>it.status||it.area||it.qtdCandidatos!=="").length;
@@ -1092,4 +1183,3 @@ initBackend();
 </script>
 </body>
 </html>
-
